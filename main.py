@@ -2,16 +2,7 @@ import os
 
 from dotenv import load_dotenv
 from openai import OpenAI
-
-
-def doChat(client, messages):
-    response = client.chat.completions.create(
-        model="deepseek-chat",
-        messages=messages,
-    )
-    messages.append(response.choices[0].message)
-    print(response.choices[0].message.content)
-
+from src.agent import do_chat
 
 if __name__ == '__main__':
     load_dotenv()
@@ -24,10 +15,11 @@ if __name__ == '__main__':
         base_url="https://api.deepseek.com"
     )
     messages = []
+    print("程序开始")
     while (True):
         current_message = input()
         if (current_message == "exit" or current_message == "q"):
             break
         messages.append({"role": "user", "content": current_message})
-        doChat(client=client, messages=messages)
+        do_chat(client=client, messages=messages)
     print("退出程序")
