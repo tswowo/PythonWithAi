@@ -2,7 +2,8 @@ import os
 
 from dotenv import load_dotenv
 from openai import OpenAI
-from src.agent import do_chat
+from src.agent import do_chat, do_chat_stream
+from logs import save_messages
 
 if __name__ == '__main__':
     load_dotenv()
@@ -21,5 +22,7 @@ if __name__ == '__main__':
         if (current_message == "exit" or current_message == "q"):
             break
         messages.append({"role": "user", "content": current_message})
-        do_chat(client=client, messages=messages)
+        do_chat_stream(client=client, messages=messages)
+        save_messages(messages)
+
     print("退出程序")
