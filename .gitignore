@@ -47,3 +47,5 @@ Thumbs.db
 desktop.ini
 
 # 注意：uv.lock 和 .python-version 应当提交（分别锁定依赖版本与解释器版本），不要加进忽略列表
+
+/chat_history.json
