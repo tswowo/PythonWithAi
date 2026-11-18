@@ -2,8 +2,10 @@ import os
 
 from dotenv import load_dotenv
 from openai import OpenAI
-from src.agent import do_chat, do_chat_stream
+from src.agent import do_chat
 from src.logs import save_messages
+
+BASE_URL_DEEPSEEK = "https://api.deepseek.com"
 
 if __name__ == '__main__':
     load_dotenv()
@@ -13,7 +15,7 @@ if __name__ == '__main__':
         raise SystemExit("未读取到 API_KEY：请在 .env 中写入 API_KEY=你的密钥")
     client = OpenAI(
         api_key=api_key,
-        base_url="https://api.deepseek.com"
+        base_url=BASE_URL_DEEPSEEK
     )
     messages = []
     print("程序开始")
