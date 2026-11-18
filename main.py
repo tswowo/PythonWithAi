@@ -22,7 +22,7 @@ if __name__ == '__main__':
         if current_message == "exit" or current_message == "q":
             break
         messages.append({"role": "user", "content": current_message})
-        do_chat_stream(client=client, messages=messages)
+        do_chat(client=client, messages=messages)
         save_messages(messages)
 
     print("退出程序")

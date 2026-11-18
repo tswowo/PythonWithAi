@@ -3,8 +3,10 @@ def do_chat(client, messages):
         model="deepseek-flash",
         messages=messages,
     )
-    messages.append(response.choices[0].message)
-    print(response.choices[0].message.content)
+    content = response.choices[0].message.content
+    response_finish_reason = response.choices[0].finish_reason
+    print(content)
+    messages.append({"role": "assistant", "content": content, "finish_reason": response_finish_reason})
 
 
 def do_chat_stream(client, messages):
