@@ -2,7 +2,8 @@ import os
 
 from dotenv import load_dotenv
 from openai import OpenAI
-from src.agent import do_chat
+
+from agent_stream import do_chat_stream
 from src.logs import save_messages
 
 BASE_URL_DEEPSEEK = "https://api.deepseek.com"
@@ -25,7 +26,7 @@ if __name__ == '__main__':
             break
         messages.append({"role": "user", "content": current_message})
         try:
-            do_chat(client=client, messages=messages)
+            do_chat_stream(client=client, messages=messages)
         except Exception as e:
             print(f"Error: {e}")
         save_messages(messages)

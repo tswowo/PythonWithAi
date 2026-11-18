@@ -94,7 +94,7 @@ def execute_tool(name, arguments):
         args = json.loads(arguments) if arguments else {}
         output = func(**args)
         print(f"调用函数{name}，参数{arguments}，返回结果{output}")
-        return str(output)
+        return json.dumps(output)
     except Exception as e:
         print(f"错误：调用工具 '{name}' 时出错: {e}")
         return f"错误：调用工具 '{name}' 时出错: {e}"
