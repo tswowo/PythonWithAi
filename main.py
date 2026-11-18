@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 from src.agent import do_chat, do_chat_stream
-from logs import save_messages
+from src.logs import save_messages
 
 if __name__ == '__main__':
     load_dotenv()
