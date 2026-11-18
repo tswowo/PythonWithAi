@@ -20,6 +20,7 @@ def search_online(query: str, count: int = 10, ori_question: str = "", localizat
             "localization": localization,
             "need_content": need_content,
         },
+        timeout=30
     )
     response.raise_for_status()
 
@@ -36,6 +37,7 @@ def fetch_online(url: str):
             "Authorization": f"Bearer {deepseek_api_key}",
         },
         json={"url": url},
+        timeout=30
     )
     response.raise_for_status()
 

@@ -24,7 +24,10 @@ if __name__ == '__main__':
         if current_message == "exit" or current_message == "q":
             break
         messages.append({"role": "user", "content": current_message})
-        do_chat(client=client, messages=messages)
+        try:
+            do_chat(client=client, messages=messages)
+        except Exception as e:
+            print(f"Error: {e}")
         save_messages(messages)
 
     print("退出程序")
