@@ -17,9 +17,9 @@ if __name__ == '__main__':
     )
     messages = []
     print("程序开始")
-    while (True):
+    while True:
         current_message = input()
-        if (current_message == "exit" or current_message == "q"):
+        if current_message == "exit" or current_message == "q":
             break
         messages.append({"role": "user", "content": current_message})
         do_chat_stream(client=client, messages=messages)

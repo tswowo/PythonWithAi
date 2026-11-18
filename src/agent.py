@@ -22,5 +22,6 @@ def do_chat_stream(client, messages):
         response_content.append(chunk_message)
         response_finish_reason = chunk.choices[0].finish_reason
         print(chunk_message, end="", flush=True)
+    print()
     content = "".join(response_content)
     messages.append({"role": "assistant", "content": content, "finish_reason": response_finish_reason})
