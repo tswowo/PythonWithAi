@@ -1,12 +1,16 @@
-def do_chat(client, messages):
+def do_chat(client, messages, reasoning=False):
     response = client.chat.completions.create(
         model="deepseek-flash",
         messages=messages,
     )
     content = response.choices[0].message.content
     response_finish_reason = response.choices[0].finish_reason
-    print(content)
     messages.append({"role": "assistant", "content": content, "finish_reason": response_finish_reason})
+    if reasoning:
+        reasoning_content=response.choices[0].message.reasoning_content
+        print(reasoning_content)
+        messages[-1]["reasoning_content"]=reasoning_content
+    print(content)
 
 
 def do_chat_stream(client, messages):
