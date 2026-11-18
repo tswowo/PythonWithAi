@@ -1,14 +1,35 @@
+import src.tools
+import tools
+
+
+def exec_tool_call(messages, tool_call):
+    output = src.tools.execute_tool(tool_call.function.name, tool_call.function.arguments)
+    messages.append({
+        "role": "tool",
+        "tool_call_id": tool_call.id,
+        "content": output,
+    })
+
+
 def do_chat(client, messages, reasoning=False):
     if reasoning:
         do_chat_reasoning(client, messages)
         return
-    response = client.chat.completions.create(
-        model="deepseek-flash",
-        messages=messages,
-    )
-    content = response.choices[0].message.content
-    messages.append({"role": "assistant", "content": content})
-    print(content)
+    for _ in range(10):
+        response = client.chat.completions.create(
+            model="deepseek-flash",
+            messages=messages,
+            tools=tools.TOOLS
+        )
+        message = response.choices[0].message
+        print(message.content)
+        messages.append(message.model_dump())
+        if not message.tool_calls:
+            break
+        for tool_call in message.tool_calls:
+            exec_tool_call(messages, tool_call)
+    else:
+        raise RuntimeError("工具调用轮次超限")
 
 
 def do_chat_stream(client, messages, reasoning=False):
