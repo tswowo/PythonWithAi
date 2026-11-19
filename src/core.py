@@ -1,10 +1,12 @@
 import os
 from typing import Any
 
-from files import build_file_message
+from src.files import build_file_message
 from src.files import upload_file
 from src.logs import save_messages
 import src.tools
+
+_USE_DEFAULT_TOOLS = object()
 
 
 class Agent:
@@ -32,17 +34,23 @@ class Agent:
 
     # 循环层
     def _run_loop(self, stream, thinking):
-        snapshot = len(self.messages)
         for _ in range(self.max_rounds):
-            assistant_message = self._complete_stream(thinking) if stream else self._complete(thinking)
+            assistant_message = self._complete_stream(thinking, _USE_DEFAULT_TOOLS) if stream else self._complete(
+                thinking)
             self.messages.append(assistant_message)
             tool_calls = assistant_message.get("tool_calls")
             if not tool_calls:
                 break
             self._run_tool_calls(tool_calls)
         else:
-            del self.messages[snapshot:]
             print("工具调用轮次超限")
+            self.messages.append({
+                "role": "user",
+                "content": "工具调用轮次暂时已达上限。",
+            })
+            assistant_message = self._complete_stream(thinking=thinking) if stream else self._complete(
+                thinking=thinking)
+            self.messages.append(assistant_message)
 
     def _run_tool_calls(self, tool_calls):
         for tc in tool_calls:
@@ -54,11 +62,11 @@ class Agent:
             })
 
     # 单轮层
-    def _complete(self, thinking):
+    def _complete(self, thinking, tools=_USE_DEFAULT_TOOLS):
         response = self.client.chat.completions.create(
             model=self.model,
             messages=self.messages,
-            tools=self.tools,
+            tools=self.tools if tools is _USE_DEFAULT_TOOLS else tools,
             extra_body={
                 "thinking": {
                     "type": "enabled" if thinking else "disabled"
@@ -74,11 +82,11 @@ class Agent:
             print("调用工具中...")
         return message.model_dump(exclude_none=True)
 
-    def _complete_stream(self, thinking):
+    def _complete_stream(self, thinking, tools=_USE_DEFAULT_TOOLS):
         stream = self.client.chat.completions.create(
             model=self.model,
             messages=self.messages,
-            tools=self.tools,
+            tools=self.tools if tools is _USE_DEFAULT_TOOLS else tools,
             stream=True,
             extra_body={
                 "thinking": {
