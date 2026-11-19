@@ -1,6 +1,8 @@
 import os
 from typing import Any
 
+from files import build_file_message
+from src.files import upload_file
 from src.logs import save_messages
 import src.tools
 
@@ -21,19 +23,11 @@ class Agent:
             self.messages.append({"role": "user", "content": text})
         self._run_loop(stream, thinking)
 
-    def chat_file(self, text, file_id, stream=False, thinking=False):
-        self.messages.append({
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": text
-                }, {
-                    "type": "file",
-                    "file_id": file_id
-                }
-            ]
-        })
+    def chat_file(self, text, file_path, stream=False, thinking=False):
+        file_id = upload_file(self.client, file_path)
+        self.messages.append(
+            build_file_message(text, file_id)
+        )
         self._run_loop(stream, thinking)
 
     # 循环层

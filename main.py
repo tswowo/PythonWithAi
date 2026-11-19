@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 import src.core
-from src.files import upload_file
 from src.tools import TOOLS
 
 BASE_URL_DEEPSEEK = "https://api.deepseek.com"
@@ -28,11 +27,10 @@ if __name__ == '__main__':
         try:
             if current_message.startswith("file "):
                 parts = current_message.split(" ", 2)
-                file_id = upload_file(client, parts[1])
                 text = parts[2] if len(parts) > 2 else "总结这份文件"
-                agent.chat_file(text, file_id)
+                agent.chat_file(text=text, file_path=parts[1])
             else:
-                agent.chat(current_message)
+                agent.chat(current_message, stream=True, thinking=True)
             agent.save()
         except Exception as e:
             print(f"Error: {e}")
