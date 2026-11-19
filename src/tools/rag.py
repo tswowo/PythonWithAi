@@ -1,13 +1,15 @@
 import json
 import os
-from typing import Any
-import dashscope
 from http import HTTPStatus
+from typing import Any
 
+import dashscope
 import numpy as np
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 BASE_EMBEDDING_URL = "https://ws-a8tixj900b7cat2u.cn-beijing.maas.aliyuncs.com/api/v1"
+EMBED_MODEL = "qwen3.7-text-embedding"
+EMBED_BATCH_SIZE = 10
 
 
 class RagIndex:
@@ -69,17 +71,22 @@ class RagIndex:
         vectors = []
         dashscope.base_http_api_url = BASE_EMBEDDING_URL
         dashscope.api_key = os.environ.get("DASHSCOPE_API_KEY")
-        for i in range(0, len(texts), 10):
-            batch = texts[i:i + 10]
+        for i in range(0, len(texts), EMBED_BATCH_SIZE):
+            batch = texts[i:i + EMBED_BATCH_SIZE]
             response = dashscope.TextEmbedding.call(
-                model="qwen3.7-text-embedding",
+                model=EMBED_MODEL,
                 input=batch
             )
             if response.status_code != HTTPStatus.OK:
-                raise Exception(f"向量化失败:{response.message}")
+                raise RuntimeError(f"向量化失败: {response.code} {response.message}")
             items = sorted(response.output["embeddings"], key=lambda e: e["text_index"])
             vectors.extend(item["embedding"] for item in items)
         return vectors
+
+    def _refresh_matrix(self):
+        """从 chunks 派生归一化矩阵，build/load 后统一调用"""
+        matrix = np.array([c["vector"] for c in self.chunks], dtype=np.float32)
+        self.vectors = matrix / (np.linalg.norm(matrix, axis=1, keepdims=True) + 1e-10)
 
     def build(self, folder_path):
         docs = self.load_documents(folder_path=folder_path)
@@ -88,9 +95,10 @@ class RagIndex:
             return
         self.chunks = self.split_documents(docs)
         texts = [chunk["text"] for chunk in self.chunks]
-        self.vectors = self.embedding_texts(texts)
-        for i, vector in enumerate(self.vectors):
-            self.chunks[i]["vector"] = vector
+        vectors = self.embedding_texts(texts)
+        for chunk, vector in zip(self.chunks, vectors):
+            chunk["vector"] = vector
+        self._refresh_matrix()
 
     def save(self, path="rag_index.json"):
         with open(path, 'w', encoding='utf-8') as f:
@@ -100,4 +108,65 @@ class RagIndex:
     def load(self, path="rag_index.json"):
         with open(path, 'r', encoding='utf-8') as f:
             self.chunks = json.load(f)
-        print(f"索引已加载从 {path}")
+        self._refresh_matrix()
+        print(f"索引已从 {path} 加载")
+
+    def search(self, query, k=5, min_score=0.3):
+        print(f"开始搜索: {query}")
+        if self.vectors is None:
+            return []
+        query_vector = np.array(self.embedding_texts([query])[0], dtype=np.float32)
+        query_vector = query_vector / (np.linalg.norm(query_vector) + 1e-10)
+        scores = self.vectors @ query_vector
+        top_indices = np.argsort(scores)[::-1][:k]
+        results = []
+        for idx in top_indices:
+            score = float(scores[idx])
+            if score < min_score:
+                continue
+            chunk = self.chunks[idx]
+            results.append({
+                "text": chunk["text"],
+                "source": chunk["source"],
+                "score": round(score, 4)
+            })
+        print(f"搜索完成，找到 {len(results)} 条相关结果。")
+        return results
+
+
+RETRIEVE_TOOL_SCHEMA = {
+    "type": "function",
+    "function": {
+        "name": "retrieve_knowledge",
+        "description": "检索本地知识库中的私有资料。当用户问题涉及内部文档、私有资料，或已有参考资料不足以回答时使用，建议用改写后的关键词检索。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "检索关键词或问题"
+                },
+                "k": {
+                    "type": "integer",
+                    "description": "返回条数，默认 5",
+                    "default": 5
+                }
+            },
+            "required": ["query"]
+        }
+    }
+}
+
+
+def make_retrieve_tool(index):
+    def retrieve_knowledge(query, k=5):
+        if not index.chunks:
+            return "知识库为空，请先建立索引"
+        results = index.search(query, k=k)
+        if not results:
+            return "未找到相关资料"
+        return "\n\n".join(
+            f"[来源: {r['source']} | 相关度: {r['score']}]\n{r['text']}"
+            for r in results
+        )
+    return retrieve_knowledge

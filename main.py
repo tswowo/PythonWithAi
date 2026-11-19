@@ -5,7 +5,8 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 import src.core
-from src.tools import TOOLS
+from src.tools import TOOLS, register_tool
+from src.tools.rag import RagIndex, make_retrieve_tool
 
 BASE_URL_DEEPSEEK = "https://api.deepseek.com"
 
@@ -20,6 +21,12 @@ if __name__ == '__main__':
         base_url=BASE_URL_DEEPSEEK
     )
     print("程序开始")
+
+    rag = RagIndex()
+    if os.path.exists("rag_index.json"):
+        rag.load()
+    register_tool("retrieve_knowledge", make_retrieve_tool(rag))
+
     agent = src.core.Agent(client=client, tools=TOOLS)
     if input("是否加载上次的对话？(load) ") == "load":
         with open("chat_history.json", "r", encoding="utf-8") as f:
