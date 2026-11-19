@@ -1,4 +1,5 @@
 import os
+import json
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -20,6 +21,9 @@ if __name__ == '__main__':
     )
     print("程序开始")
     agent = src.core.Agent(client=client, tools=TOOLS)
+    if input("是否加载上次的对话？(load) ") == "load":
+        with open("chat_history.json", "r", encoding="utf-8") as f:
+            agent.messages = json.load(f)
     while True:
         current_message = input()
         if current_message == "exit" or current_message == "q":
