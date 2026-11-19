@@ -3,9 +3,9 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from agent_stream import do_chat_stream
-from files import upload_file, build_file_message
-from src.logs import save_messages
+import src.core
+from src.files import upload_file
+from src.tools import TOOLS
 
 BASE_URL_DEEPSEEK = "https://api.deepseek.com"
 
@@ -19,8 +19,8 @@ if __name__ == '__main__':
         api_key=api_key,
         base_url=BASE_URL_DEEPSEEK
     )
-    messages = []
     print("程序开始")
+    agent = src.core.Agent(client=client, tools=TOOLS)
     while True:
         current_message = input()
         if current_message == "exit" or current_message == "q":
@@ -30,13 +30,10 @@ if __name__ == '__main__':
                 parts = current_message.split(" ", 2)
                 file_id = upload_file(client, parts[1])
                 text = parts[2] if len(parts) > 2 else "总结这份文件"
-                messages.append(build_file_message(text, file_id))
+                agent.chat_file(text, file_id)
             else:
-                messages.append({"role": "user", "content": current_message})
-
-            do_chat_stream(client=client, messages=messages)
+                agent.chat(current_message)
+            agent.save()
         except Exception as e:
             print(f"Error: {e}")
-        save_messages(messages)
-
     print("退出程序")
