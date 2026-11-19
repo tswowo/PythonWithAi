@@ -25,7 +25,6 @@ if __name__ == '__main__':
         current_message = input()
         if current_message == "exit" or current_message == "q":
             break
-        messages.append({"role": "user", "content": current_message})
         try:
             if current_message.startswith("file "):
                 parts = current_message.split(" ", 2)
