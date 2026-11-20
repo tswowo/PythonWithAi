@@ -7,6 +7,7 @@ from openai import OpenAI
 import src.core
 from src.tools import TOOLS, register_tool
 from src.tools.rag import RagIndex, make_retrieve_tool
+from src.tools.content import make_content_tool
 
 BASE_URL_DEEPSEEK = "https://api.deepseek.com"
 
@@ -21,16 +22,18 @@ if __name__ == '__main__':
         base_url=BASE_URL_DEEPSEEK
     )
     print("程序开始")
-
+    agent = src.core.Agent(client=client, tools=TOOLS)
     rag = RagIndex()
     if os.path.exists("rag_index.json"):
         rag.load()
     register_tool("retrieve_knowledge", make_retrieve_tool(rag))
+    register_tool("get_content_tokens", make_content_tool(agent))
 
-    agent = src.core.Agent(client=client, tools=TOOLS)
     if input("是否加载上次的对话？(load) ") == "load":
         with open("chat_history.json", "r", encoding="utf-8") as f:
             agent.messages = json.load(f)
+    thinking = True if (input("打开思考模式?(y)") == "y") else False
+    stream = True if (input("打开流式输出?(y)") == "y") else False
     while True:
         current_message = input()
         if current_message == "exit" or current_message == "q":
@@ -59,9 +62,14 @@ if __name__ == '__main__':
                     rag.add(folder)
                     if len(rag.chunks) > before:
                         rag.save()
-                        print(f"已追加 {len(rag.chunks) - before} 个 chunk，知识库共 {len(rag.chunks)} 个，当前会话即可检索。")
+                        print(
+                            f"已追加 {len(rag.chunks) - before} 个 chunk，知识库共 {len(rag.chunks)} 个，当前会话即可检索。")
+            elif current_message.startswith("/compact "):
+                parts = current_message.split(" ", 2)
+                agent.compact(parts[1])
+                agent.save()
             else:
-                agent.chat(current_message, stream=True, thinking=True)
+                agent.chat(current_message, stream=stream, thinking=thinking)
                 agent.save()
         except Exception as e:
             print(f"Error: {e}")

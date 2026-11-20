@@ -18,6 +18,7 @@ class Agent:
         self.tools = tools
         self.max_rounds = max_rounds if max_rounds is not None else int(os.environ.get("MAX_TOOL_ROUNDS", "10"))
         self.messages: list[dict[str, Any]] = []
+        self.usage = None
 
     # 输入层
     def chat(self, text=None, stream=False, thinking=False):
@@ -38,6 +39,7 @@ class Agent:
             assistant_message = self._complete_stream(thinking, _USE_DEFAULT_TOOLS) if stream else self._complete(
                 thinking)
             self.messages.append(assistant_message)
+            self._judge_compact()
             tool_calls = assistant_message.get("tool_calls")
             if not tool_calls:
                 break
@@ -62,6 +64,10 @@ class Agent:
             })
 
     # 单轮层
+    def _judge_compact(self, content=None):
+        if self.usage.total_tokens > 1000000000:
+            self.compact(content)
+
     def _complete(self, thinking, tools=_USE_DEFAULT_TOOLS):
         response = self.client.chat.completions.create(
             model=self.model,
@@ -80,6 +86,8 @@ class Agent:
             print(message.content)
         if message.tool_calls:
             print("调用工具中...")
+        usage = getattr(response, "usage", None)
+        self.usage = usage
         return message.model_dump(exclude_none=True)
 
     def _complete_stream(self, thinking, tools=_USE_DEFAULT_TOOLS):
@@ -88,6 +96,9 @@ class Agent:
             messages=self.messages,
             tools=self.tools if tools is _USE_DEFAULT_TOOLS else tools,
             stream=True,
+            stream_options={
+                "include_usage": True
+            },
             extra_body={
                 "thinking": {
                     "type": "enabled" if thinking else "disabled"
@@ -98,6 +109,9 @@ class Agent:
         tool_calls: dict[int, dict] = {}
         # 处理普通对话，收集工具调用信息
         for chunk in stream:
+            usage = getattr(chunk, "usage", None)
+            if usage:
+                self.usage = usage
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
@@ -145,3 +159,31 @@ class Agent:
     # 持久化
     def save(self, path="chat_history.json"):
         save_messages(self.messages, path)
+
+    # 压缩上下文摘要
+    def compact(self, content=None):
+        if not self.messages:
+            print("没有可压缩的对话")
+            return
+        print("开始压缩上下文...")
+        instruction = f"请将对话内容压缩为摘要，保留关键事实、决定和未完成事项。{content if content else ''}"
+        # 用临时副本发请求，压缩指令不污染原历史
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=self.messages + [{"role": "user", "content": instruction}],
+            stream=False,
+            extra_body={
+                "thinking": {
+                    "type": "disabled"
+                }}
+        )
+        summary = response.choices[0].message.content or ""
+        print("压缩上下文完成:", summary)
+        # 保留最近十条消息；窗口开头若是 tool 消息，向前扩到对应的 assistant(tool_calls)，保证工具调用完整
+        start = max(0, len(self.messages) - 10)
+        while start > 0 and self.messages[start]["role"] == "tool":
+            start -= 1
+        kept = self.messages[start:]
+        # 压缩结果放 system，与保留窗口组成全新列表
+        self.messages = [{"role": "system", "content": summary}] + kept
+        self.usage = response.usage

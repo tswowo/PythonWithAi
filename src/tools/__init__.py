@@ -1,6 +1,7 @@
 import json
 from collections.abc import Callable
 
+from .content import CONTENT_TOKENS_TOOL_SCHEMA
 from .online_search import search_online, fetch_online, ONLINE_SEARCH_TOOL_SCHEMA, ONLINE_FETCH_TOOL_SCHEMA
 from .rag import RETRIEVE_TOOL_SCHEMA
 from .time import get_current_time, TIME_TOOL_SCHEMA
@@ -9,7 +10,8 @@ TOOLS = [
     TIME_TOOL_SCHEMA,
     ONLINE_SEARCH_TOOL_SCHEMA,
     ONLINE_FETCH_TOOL_SCHEMA,
-    RETRIEVE_TOOL_SCHEMA
+    RETRIEVE_TOOL_SCHEMA,
+    CONTENT_TOKENS_TOOL_SCHEMA
 ]
 
 TOOL_MAP: dict[str, Callable[..., str]] = {
