@@ -50,6 +50,16 @@ if __name__ == '__main__':
                     if rag.chunks:
                         rag.save()
                         print(f"知识库已更新，共 {len(rag.chunks)} 个 chunk，当前会话即可检索。")
+            elif current_message.startswith("add "):
+                folder = current_message.split(" ", 1)[1].strip()
+                if not os.path.isdir(folder):
+                    print(f"错误：文件夹不存在：{folder}")
+                else:
+                    before = len(rag.chunks)
+                    rag.add(folder)
+                    if len(rag.chunks) > before:
+                        rag.save()
+                        print(f"已追加 {len(rag.chunks) - before} 个 chunk，知识库共 {len(rag.chunks)} 个，当前会话即可检索。")
             else:
                 agent.chat(current_message, stream=True, thinking=True)
                 agent.save()

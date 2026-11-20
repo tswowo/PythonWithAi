@@ -136,19 +136,44 @@ class RagIndex:
 
     def _refresh_matrix(self):
         """从 chunks 派生归一化矩阵，build/load 后统一调用"""
+        if not self.chunks:
+            self.vectors = None
+            return
         matrix = np.array([c["vector"] for c in self.chunks], dtype=np.float32)
         self.vectors = matrix / (np.linalg.norm(matrix, axis=1, keepdims=True) + 1e-10)
 
+    def _embed_and_split(self, docs):
+        """切分并向量化一批文档，返回带向量的新 chunk"""
+        new_chunks = self.split_documents(docs)
+        texts = [chunk["text"] for chunk in new_chunks]
+        vectors = self.embedding_texts(texts)
+        for chunk, vector in zip(new_chunks, vectors):
+            chunk["vector"] = vector
+        return new_chunks
+
     def build(self, folder_path):
+        """全量重建：用文件夹内容替换整个知识库"""
         docs = self.load_documents(folder_path=folder_path)
         if not docs:
             print("没有找到任何文档")
             return
-        self.chunks = self.split_documents(docs)
-        texts = [chunk["text"] for chunk in self.chunks]
-        vectors = self.embedding_texts(texts)
-        for chunk, vector in zip(self.chunks, vectors):
-            chunk["vector"] = vector
+        new_chunks = self._embed_and_split(docs)
+        # 向量化成功后才替换内存，中途失败时原有索引保持完整
+        self.chunks = new_chunks
+        self._refresh_matrix()
+
+    def add(self, folder_path):
+        """增量追加：把文件夹内容加入现有知识库"""
+        docs = self.load_documents(folder_path=folder_path)
+        if not docs:
+            print("没有找到任何文档")
+            return
+        new_chunks = self._embed_and_split(docs)
+        # 向量化成功后才追加，中途失败时原有索引保持完整
+        base = len(self.chunks)
+        for j, chunk in enumerate(new_chunks):
+            chunk["chunk_id"] = base + j
+        self.chunks.extend(new_chunks)
         self._refresh_matrix()
 
     def save(self, path="rag_index.json"):
