@@ -1,5 +1,8 @@
+import hashlib
 import json
 import os
+import time
+from concurrent.futures import ThreadPoolExecutor
 from http import HTTPStatus
 from typing import Any
 
@@ -9,7 +12,11 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 BASE_EMBEDDING_URL = "https://ws-a8tixj900b7cat2u.cn-beijing.maas.aliyuncs.com/api/v1"
 EMBED_MODEL = "qwen3.7-text-embedding"
-EMBED_BATCH_SIZE = 10
+EMBED_BATCH_SIZE = 20 # 百炼平台要求的每批向量最大数量
+EMBED_WORKERS = 5  # 并发线程数
+EMBED_MAX_RETRIES = 8  # 单批限流重试次数，退避等待 5s→10s→…→60s 封顶
+EMBED_CACHE_BIN = "embed_cache.bin"  # 断点续传：已完成批次的向量
+EMBED_CACHE_META = "embed_cache.json"  # 断点续传：输入指纹与已完成批数
 
 
 class RagIndex:
@@ -41,6 +48,7 @@ class RagIndex:
                     "text": content,  # 文件全部内容
                     "source": filename  # 文件名作为来源
                 })
+        print(f"共读取 {len(docs)} 个文件")
         return docs
 
     @staticmethod
@@ -66,21 +74,64 @@ class RagIndex:
         return chunks
 
     @staticmethod
-    def embedding_texts(texts):
-        print("开始生成向量")
-        vectors = []
-        dashscope.base_http_api_url = BASE_EMBEDDING_URL
-        dashscope.api_key = os.environ.get("DASHSCOPE_API_KEY")
-        for i in range(0, len(texts), EMBED_BATCH_SIZE):
-            batch = texts[i:i + EMBED_BATCH_SIZE]
+    def _embed_batch(batch):
+        """单批向量化，供线程池并发调用；触发限流时自动退避重试"""
+        for attempt in range(EMBED_MAX_RETRIES):
             response = dashscope.TextEmbedding.call(
                 model=EMBED_MODEL,
                 input=batch
             )
-            if response.status_code != HTTPStatus.OK:
-                raise RuntimeError(f"向量化失败: {response.code} {response.message}")
-            items = sorted(response.output["embeddings"], key=lambda e: e["text_index"])
-            vectors.extend(item["embedding"] for item in items)
+            if response.status_code == HTTPStatus.OK:
+                items = sorted(response.output["embeddings"], key=lambda e: e["text_index"])
+                return [item["embedding"] for item in items]
+            if "Throttling" in str(response.code) and attempt < EMBED_MAX_RETRIES - 1:
+                wait = min(5 * 2 ** attempt, 60)
+                print(f"触发限流，{wait}s 后重试（{attempt + 1}/{EMBED_MAX_RETRIES - 1}）")
+                time.sleep(wait)
+                continue
+            raise RuntimeError(f"向量化失败: {response.code} {response.message}")
+
+    @staticmethod
+    def embedding_texts(texts):
+        print("开始生成向量")
+        dashscope.base_http_api_url = BASE_EMBEDDING_URL
+        dashscope.api_key = os.environ.get("DASHSCOPE_API_KEY")
+        batches = [texts[i:i + EMBED_BATCH_SIZE] for i in range(0, len(texts), EMBED_BATCH_SIZE)]
+        total = len(batches)
+        # 单批场景（如 search 查询）不走断点缓存，避免误覆盖建库缓存
+        if total <= 1:
+            vectors = []
+            for batch in batches:
+                vectors.extend(RagIndex._embed_batch(batch))
+            return vectors
+
+        # 输入指纹：文本完全一致才复用上次已生成的向量
+        fingerprint = hashlib.sha256("\n".join(texts).encode("utf-8")).hexdigest()
+        vectors = []
+        done = 0
+        if os.path.exists(EMBED_CACHE_META) and os.path.exists(EMBED_CACHE_BIN):
+            with open(EMBED_CACHE_META, encoding="utf-8") as f:
+                meta = json.load(f)
+            if meta.get("fingerprint") == fingerprint:
+                done = meta.get("done_batches", 0)
+                cached = np.fromfile(EMBED_CACHE_BIN, dtype=np.float32)
+                vectors = cached.reshape(-1, meta["dim"]).tolist()
+                print(f"从断点续传：已完成 {done}/{total} 批")
+        with open(EMBED_CACHE_BIN, "ab" if done else "wb") as cache_f:
+            # map 按提交顺序返回结果，保证向量与 texts 一一对应
+            with ThreadPoolExecutor(max_workers=EMBED_WORKERS) as pool:
+                for i, batch_vectors in enumerate(pool.map(RagIndex._embed_batch, batches[done:]), done + 1):
+                    vectors.extend(batch_vectors)
+                    # 每批完成即落盘，中断后下次可从断点继续
+                    np.asarray(batch_vectors, dtype=np.float32).tofile(cache_f)
+                    cache_f.flush()
+                    with open(EMBED_CACHE_META, "w", encoding="utf-8") as f:
+                        json.dump({"fingerprint": fingerprint, "done_batches": i, "dim": len(batch_vectors[0])}, f)
+                    if i % 50 == 0 or i == total:
+                        print(f"向量化进度: {i}/{total} 批")
+        # 全部完成，清理断点缓存
+        os.remove(EMBED_CACHE_BIN)
+        os.remove(EMBED_CACHE_META)
         return vectors
 
     def _refresh_matrix(self):

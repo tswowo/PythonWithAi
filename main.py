@@ -40,9 +40,19 @@ if __name__ == '__main__':
                 parts = current_message.split(" ", 2)
                 text = parts[2] if len(parts) > 2 else "总结这份文件"
                 agent.chat_file(text=text, file_path=parts[1])
+                agent.save()
+            elif current_message.startswith("build "):
+                folder = current_message.split(" ", 1)[1].strip()
+                if not os.path.isdir(folder):
+                    print(f"错误：文件夹不存在：{folder}")
+                else:
+                    rag.build(folder)
+                    if rag.chunks:
+                        rag.save()
+                        print(f"知识库已更新，共 {len(rag.chunks)} 个 chunk，当前会话即可检索。")
             else:
                 agent.chat(current_message, stream=True, thinking=True)
-            agent.save()
+                agent.save()
         except Exception as e:
             print(f"Error: {e}")
     print("退出程序")
