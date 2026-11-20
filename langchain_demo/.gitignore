@@ -1,0 +1,3 @@
+# ---------- langchain_demo 本地产物----------
+.venv/
+.env
