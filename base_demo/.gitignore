@@ -1,0 +1,12 @@
+# ---------- base_demo 本地产物----------
+.venv/
+chat_history.json
+rag_index.json
+embed_cache.bin
+embed_cache.json
+
+# ---------- 数据集 ----------
+md_test/
+.mdn_cache/
+
+.env

@@ -47,11 +47,4 @@ Thumbs.db
 desktop.ini
 
 # 注意：uv.lock 和 .python-version 应当提交（分别锁定依赖版本与解释器版本），不要加进忽略列表
-
-/chat_history.json
-
-# ---------- RAG 建库产物与数据集----------
-/md_test
-/rag_index.json
-/embed_cache.bin
-/embed_cache.json
+# 各 demo 特有的产物（venv、rag_index.json、md_test/ 等）写在各自子目录的 .gitignore 里
